@@ -1,0 +1,31 @@
+---
+title: "Analysis of Accelerometers Data"
+author: "Sarah"
+date: "9/17/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+#Introduction   
+
+This project uses data recorded from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. These participants were asked to perform barbell lifts correctly and incorrectly in 5 different ways.  
+
+The goal is to predict the manner in which they did the exercise >> classe variable 
+
+## Getting Data
+
+```{r}
+if(!file.exists("data")){
+        dir.create("data")
+        download.file(url="https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv",destfile = "data/training.csv")
+        download.file(url="https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv",destfile = "data/testing.csv")        
+}
+training<-read.csv("data/training.csv")
+testing<-read.csv("data/testing.csv")
+
+```
+
+how you built your model, how you used cross validation, what you think the expected out of sample error is, and why you made the choices you did. You will also use your prediction model to predict 20 different test case.
