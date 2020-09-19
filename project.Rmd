@@ -13,19 +13,159 @@ knitr::opts_chunk$set(echo = TRUE)
 
 This project uses data recorded from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. These participants were asked to perform barbell lifts correctly and incorrectly in 5 different ways.  
 
-The goal is to predict the manner in which they did the exercise >> classe variable 
+The goal is to predict the manner in which the participants did the exercise >> classe variable 
 
 ## Getting Data
 
-```{r}
+The training and testing sets are downloaded from the online source as below:  
+
+```{r cache=TRUE}
 if(!file.exists("data")){
-        dir.create("data")
+        dir.create("`data")
         download.file(url="https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv",destfile = "data/training.csv")
         download.file(url="https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv",destfile = "data/testing.csv")        
 }
 training<-read.csv("data/training.csv")
 testing<-read.csv("data/testing.csv")
 
+nRowsTrain<-dim(training)[1]
+nRowsTest<-dim(training)[1]
+partTrain<-sample(nRowsTrain,1000)
+partTest<-sample(nRowsTest,1000)
+
+
+training<-training[partTrain,]
+testing<-testing[partTest,]
 ```
 
-how you built your model, how you used cross validation, what you think the expected out of sample error is, and why you made the choices you did. You will also use your prediction model to predict 20 different test case.
+```{r echo=FALSE}
+nCols<-dim(training)[2]
+nRows<-dim(training)[1]
+```
+
+# Exploring the training set
+In order to build the model we should first explore the training set. The dataset consists of `r nCols` columns and `r nRows` rows.  
+
+```{r}
+checkNAs<-function(v,len){
+        sum(is.na(v)*1)/len
+}
+amountNAs<-sapply(training,FUN = checkNAs,nRows)
+colsNAs<-amountNAs[which(amountNAs>0)]
+```
+
+1- By looking at the data, we first noticed `r length(colsNAs)` columns with high percentage of missing values so we decided to track them and exclude them from the data set:  
+
+```{r}
+colsNAs
+```
+
+```{r}
+
+trainingNew<-training[,!(names(training) %in% names(colsNAs))]
+testingNew<-training[,!(names(testing) %in% names(colsNAs))]
+```
+
+Now we are left with 93 columns
+2- we will exclude the first 7 columns as they are related to participants information and other information not usefull to be used as predictors.  
+ 
+```{r}
+excludedCols<-names(trainingNew)[1:7]
+excludedCols
+```
+
+
+```{r}
+trainingNew<-trainingNew[,!(names(trainingNew) %in% excludedCols)]
+testingNew<-trainingNew[,!(names(trainingNew) %in% excludedCols)]
+
+```
+
+Now we have `r dim(trainingNew)[2]` columns that will try to fit model with  
+
+# Building the models  
+
+```{r}
+set.seed(123)
+```
+
+## Extracting validation set  
+We split the training set to training and validation. The testing set is left for final testing on unseen data   
+(we set small portion for training due to memory limit problem)
+
+```{r cache=TRUE}
+library(caret)
+inTrain <- createDataPartition(y = trainingNew$classe, p = 0.75, list = FALSE)
+trainingNew <- trainingNew[inTrain, ]
+validation <- trainingNew[-inTrain, ]
+
+#free some memory
+rm(training,testing)
+dim(trainingNew);dim(validation)
+```
+
+## Define CV function  
+
+This cross validation function will be used in the train function for all models 
+
+```{r cache=T}
+fitControl <- trainControl(method = "cv", number = 3, returnResamp = "all")
+```
+
+## Train model :logistic regression with boosting 
+
+```{r cache=TRUE}
+mod.LogitBoost<- train(classe ~ ., data = trainingNew, method = "LogitBoost"
+              , trControl = fitControl)
+```
+## Train model :classification tree
+
+```{r cache=TRUE}
+mod.rpart<- train(classe ~ ., data = trainingNew, method = "rpart"
+              , trControl = fitControl)
+```
+
+## Evaluate on validation set  
+### LogitBoost
+
+```{r cache=TRUE}
+pred.valid.LogitBoost<-predict(mod.LogitBoost,validation)
+confusionMatrix(pred.valid.LogitBoost,validation$classe)
+```
+### classification tree
+
+```{r cache=TRUE}
+pred.valid.rpart<-predict(mod.rpart,validation)
+confusionMatrix(pred.valid.rpart,validation$classe)
+```
+
+# Prediction on test set
+
+## LogitBoost  
+
+```{r}
+pred.test.LogitBoost<-predict(mod.LogitBoost,testingNew)
+table(pred.test.LogitBoost,testingNew$classe)
+```
+## classification tree
+```{r}
+pred.test.rpart<-predict(mod.rpart,testingNew)
+table(pred.test.rpart,testingNew$classe)
+```
+
+The “logistic regression with boosting" model give a very high accuracy (~98%) on validation and testing set with only few classes predicted wrong.
+The comparion of actual and predicted classes showing minor error
+
+##In sample vs. out of sample error of LogitBoost (best accuracy model)
+
+```{r cache=TRUE}
+#In Sample
+pred.train.LogitBoost<-predict(mod.LogitBoost,trainingNew)
+NAS<- which(is.na(pred.train.LogitBoost))
+1-sum((pred.train.LogitBoost[-NAS]==trainingNew[-NAS,'classe'])*1)/length(pred.train.LogitBoost)
+
+#Out Sample
+NAS<- which(is.na(pred.test.LogitBoost))
+1-sum((pred.test.LogitBoost[-NAS]==testingNew[-NAS,'classe'])*1)/length(pred.test.LogitBoost)
+```
+The out of sample error is higher than the in sample error because it was tested on new unseen data but generaly it is very low 
