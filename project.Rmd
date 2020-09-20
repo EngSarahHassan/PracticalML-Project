@@ -9,15 +9,21 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-#Introduction   
+# Introduction   
 
 This project uses data recorded from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. These participants were asked to perform barbell lifts correctly and incorrectly in 5 different ways.  
 
 The goal is to predict the manner in which the participants did the exercise >> classe variable 
 
-## Getting Data
+Note: due to limited memory, the trainig and evaluation was done on sample of the data and also could only train few models  
+
+## Getting Data  
 
 The training and testing sets are downloaded from the online source as below:  
+
+```{r}
+set.seed(123)
+```
 
 ```{r cache=TRUE}
 if(!file.exists("data")){
@@ -28,6 +34,10 @@ if(!file.exists("data")){
 training<-read.csv("data/training.csv")
 testing<-read.csv("data/testing.csv")
 
+```
+
+Then subsampled to get random sample:  
+```{r cache=T}
 nRowsTrain<-dim(training)[1]
 nRowsTest<-dim(training)[1]
 partTrain<-sample(nRowsTrain,1000)
@@ -37,6 +47,7 @@ partTest<-sample(nRowsTest,1000)
 training<-training[partTrain,]
 testing<-testing[partTest,]
 ```
+
 
 ```{r echo=FALSE}
 nCols<-dim(training)[2]
@@ -66,7 +77,7 @@ trainingNew<-training[,!(names(training) %in% names(colsNAs))]
 testingNew<-training[,!(names(testing) %in% names(colsNAs))]
 ```
 
-Now we are left with 93 columns
+Now we are left with 93 columns  
 2- we will exclude the first 7 columns as they are related to participants information and other information not usefull to be used as predictors.  
  
 ```{r}
@@ -83,11 +94,12 @@ testingNew<-trainingNew[,!(names(trainingNew) %in% excludedCols)]
 
 Now we have `r dim(trainingNew)[2]` columns that will try to fit model with  
 
-# Building the models  
-
+# Clear Some Memory  
 ```{r}
-set.seed(123)
+rm(training,testing,partTest,partTrain,colsNAs)
 ```
+
+# Building the models  
 
 ## Extracting validation set  
 We split the training set to training and validation. The testing set is left for final testing on unseen data   
@@ -99,8 +111,6 @@ inTrain <- createDataPartition(y = trainingNew$classe, p = 0.75, list = FALSE)
 trainingNew <- trainingNew[inTrain, ]
 validation <- trainingNew[-inTrain, ]
 
-#free some memory
-rm(training,testing)
 dim(trainingNew);dim(validation)
 ```
 
@@ -118,28 +128,40 @@ fitControl <- trainControl(method = "cv", number = 3, returnResamp = "all")
 mod.LogitBoost<- train(classe ~ ., data = trainingNew, method = "LogitBoost"
               , trControl = fitControl)
 ```
-## Train model :classification tree
+
+```{r}
+plot(mod.LogitBoost)
+```
+The LogitBoost shows relatively good accuracy over all cross validation sets  
+
+## Train model :classification tree  
 
 ```{r cache=TRUE}
 mod.rpart<- train(classe ~ ., data = trainingNew, method = "rpart"
               , trControl = fitControl)
 ```
 
+```{r}
+plot(mod.rpart)
+```
+
+The rpart model shows worse results than LogitBoost over all the cross validation sets.  
+
 ## Evaluate on validation set  
-### LogitBoost
+### LogitBoost  
 
 ```{r cache=TRUE}
 pred.valid.LogitBoost<-predict(mod.LogitBoost,validation)
 confusionMatrix(pred.valid.LogitBoost,validation$classe)
 ```
-### classification tree
+### classification tree  
 
 ```{r cache=TRUE}
 pred.valid.rpart<-predict(mod.rpart,validation)
 confusionMatrix(pred.valid.rpart,validation$classe)
 ```
 
-# Prediction on test set
+# Prediction on test set  
 
 ## LogitBoost  
 
@@ -147,16 +169,16 @@ confusionMatrix(pred.valid.rpart,validation$classe)
 pred.test.LogitBoost<-predict(mod.LogitBoost,testingNew)
 table(pred.test.LogitBoost,testingNew$classe)
 ```
-## classification tree
+## classification tree  
 ```{r}
 pred.test.rpart<-predict(mod.rpart,testingNew)
 table(pred.test.rpart,testingNew$classe)
 ```
 
-The “logistic regression with boosting" model give a very high accuracy (~98%) on validation and testing set with only few classes predicted wrong.
-The comparion of actual and predicted classes showing minor error
+The “logistic regression with boosting" model give a very high accuracy (~97%) on validation and testing set with only few classes predicted wrong.
+The comparion of actual and predicted classes showing minor error  
 
-##In sample vs. out of sample error of LogitBoost (best accuracy model)
+## In sample vs. out of sample error of LogitBoost (best accuracy model)
 
 ```{r cache=TRUE}
 #In Sample
