@@ -17,14 +17,12 @@ This project uses data recorded from accelerometers on the belt, forearm, arm, a
 
 The goal is to predict the manner in which the participants did the exercise >> classe variable 
 
-Note: due to limited memory, the trainig and evaluation was done on sample of the data and also could only train few models  
-
 ## Getting Data  
 
 The training and testing sets are downloaded from the online source as below:  
 
 ```{r}
-set.seed(123)
+set.seed(111)
 ```
 
 ```{r cache=TRUE}
@@ -38,18 +36,6 @@ testing<-read.csv("data/testing.csv")
 
 ```
 
-Then subsampled to get random sample:  
-```{r cache=T}
-nRowsTrain<-dim(training)[1]
-nRowsTest<-dim(training)[1]
-partTrain<-sample(nRowsTrain,1000)
-partTest<-sample(nRowsTest,1000)
-
-
-training<-training[partTrain,]
-testing<-testing[partTest,]
-```
-
 
 ```{r echo=FALSE}
 nCols<-dim(training)[2]
@@ -57,11 +43,16 @@ nRows<-dim(training)[1]
 ```
 
 # Exploring the training set
-In order to build the model we should first explore the training set. The dataset consists of `r nCols` columns and `r nRows` rows.  
+In order to build the model we should first explore the training set. The training set consists of `r nCols` columns and `r nRows` rows.  
 
 ```{r}
 checkNAs<-function(v,len){
-        sum(is.na(v)*1)/len
+        s1<-sum(is.na(v)*1)/len
+        s2<-0
+        if(class(v)=="factor"){
+          s2<-sum((v=="")*1)/len
+        }
+        max(s1,s2)
 }
 amountNAs<-sapply(training,FUN = checkNAs,nRows)
 colsNAs<-amountNAs[which(amountNAs>0)]
@@ -76,10 +67,10 @@ colsNAs
 ```{r}
 
 trainingNew<-training[,!(names(training) %in% names(colsNAs))]
-testingNew<-training[,!(names(testing) %in% names(colsNAs))]
+testingNew<-testing[,!(names(testing) %in% names(colsNAs))]
 ```
 
-Now we are left with 93 columns  
+Now we are left with 60 columns  
 2- we will exclude the first 7 columns as they are related to participants information and other information not usefull to be used as predictors.  
  
 ```{r}
@@ -90,26 +81,21 @@ excludedCols
 
 ```{r}
 trainingNew<-trainingNew[,!(names(trainingNew) %in% excludedCols)]
-testingNew<-trainingNew[,!(names(trainingNew) %in% excludedCols)]
+testingNew<-testingNew[,!(names(testingNew) %in% excludedCols)]
 
 ```
 
 Now we have `r dim(trainingNew)[2]` columns that will try to fit model with  
 
-# Clear Some Memory  
-```{r}
-rm(training,testing,partTest,partTrain,colsNAs)
-```
-
 # Building the models  
 
-## Extracting validation set  
-We split the training set to training and validation. The testing set is left for final testing on unseen data   
-(we set small portion for training due to memory limit problem)
+## Extracting validation set   
+
+We split the training set to training and validation. The testing set is left for final testing on unseen data. The validation set is used to evaluate accuracy. 
 
 ```{r cache=TRUE}
 library(caret)
-inTrain <- createDataPartition(y = trainingNew$classe, p = 0.75, list = FALSE)
+inTrain <- createDataPartition(y = trainingNew$classe, p = 0.8, list = FALSE)
 trainingNew <- trainingNew[inTrain, ]
 validation <- trainingNew[-inTrain, ]
 
@@ -121,7 +107,7 @@ dim(trainingNew);dim(validation)
 This cross validation function will be used in the train function for all models 
 
 ```{r cache=T}
-fitControl <- trainControl(method = "cv", number = 3, returnResamp = "all")
+fitControl <- trainControl(method = "cv", number = 5, returnResamp = "all")
 ```
 
 ## Train model :logistic regression with boosting 
@@ -139,8 +125,8 @@ The LogitBoost shows relatively good accuracy over all cross validation sets
 ## Train model :classification tree  
 
 ```{r cache=TRUE}
-mod.rpart<- train(classe ~ ., data = trainingNew, method = "rpart"
-              , trControl = fitControl)
+mod.rpart<- train(classe ~ ., data = trainingNew, method = "rpart",
+                 trControl = fitControl)
 ```
 
 ```{r}
@@ -169,16 +155,10 @@ confusionMatrix(pred.valid.rpart,validation$classe)
 
 ```{r}
 pred.test.LogitBoost<-predict(mod.LogitBoost,testingNew)
-table(pred.test.LogitBoost,testingNew$classe)
-```
-## classification tree  
-```{r}
-pred.test.rpart<-predict(mod.rpart,testingNew)
-table(pred.test.rpart,testingNew$classe)
+
 ```
 
-The “logistic regression with boosting" model give a very high accuracy (~97%) on validation and testing set with only few classes predicted wrong.
-The comparion of actual and predicted classes showing minor error  
+The “logistic regression with boosting" model give a very high accuracy (>90%) on validation and testing set with only few classes predicted wrong.
 
 ## In sample vs. out of sample error of LogitBoost (best accuracy model)
 
@@ -189,7 +169,7 @@ NAS<- which(is.na(pred.train.LogitBoost))
 1-sum((pred.train.LogitBoost[-NAS]==trainingNew[-NAS,'classe'])*1)/length(pred.train.LogitBoost)
 
 #Out Sample
-NAS<- which(is.na(pred.test.LogitBoost))
-1-sum((pred.test.LogitBoost[-NAS]==testingNew[-NAS,'classe'])*1)/length(pred.test.LogitBoost)
+NAS<- which(is.na(pred.valid.LogitBoost))
+1-sum((pred.valid.LogitBoost[-NAS]==validation[-NAS,'classe'])*1)/length(pred.valid.LogitBoost)
 ```
 The out of sample error is higher than the in sample error because it was tested on new unseen data but generaly it is very low 
